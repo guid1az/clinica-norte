@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { site } from '../config/site';
 import { links } from '../lib/links';
 import { EASE_IN_OUT, EASE_OUT, gsap, scrollToId } from '../lib/motion';
@@ -32,6 +32,39 @@ function Headline({ tone, layer }: { tone: 'ink' | 'paper'; layer: 'dark' | 'lig
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Vídeo da abertura com autoplay confiável no celular.
+ * O React não escreve o atributo `muted` no HTML, e o Safari do iPhone só permite
+ * autoplay em vídeo que já nasce mudo. Por isso o mudo e o play são forçados aqui.
+ * A versão leve é escolhida pela largura da tela (o atributo `media` em <source> não é confiável).
+ */
+function HeroVideo({ src, mobileSrc, poster }: { src: string; mobileSrc: string | null; poster: string | null }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = true;
+    v.defaultMuted = true;
+    v.setAttribute('muted', '');
+    v.setAttribute('playsinline', '');
+    v.setAttribute('webkit-playsinline', '');
+    v.src = mobileSrc && window.matchMedia('(max-width: 767px)').matches ? mobileSrc : src;
+    const tryPlay = () => { v.play().catch(() => {}); };
+    tryPlay();
+    v.addEventListener('canplay', tryPlay, { once: true });
+    // Modo economia de energia pode bloquear o autoplay: o primeiro toque na página destrava
+    const unlock = () => tryPlay();
+    window.addEventListener('touchstart', unlock, { once: true, passive: true });
+    const onVis = () => { if (!document.hidden) tryPlay(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.removeEventListener('touchstart', unlock); document.removeEventListener('visibilitychange', onVis); };
+  }, [src, mobileSrc]);
+  return (
+    <video ref={ref} className="h-full w-full object-cover" poster={poster ?? undefined}
+      autoPlay muted loop playsInline preload="auto" aria-label="Vídeo ilustrativo do atendimento na clínica" />
   );
 }
 
@@ -70,10 +103,7 @@ export function HeroSection() {
       <div className="hero-media absolute inset-x-0 bottom-0 top-[calc(140px+clamp(3.6rem,17vw,5.5rem)*1.75+11.5rem)] md:top-0 md:[clip-path:inset(0_0_0_50%)]">
         <div className="hero-media-inner absolute inset-0 bg-sage-deep">
           {heroVideo ? (
-            <video className="h-full w-full object-cover" poster={heroPoster ?? undefined} autoPlay muted loop playsInline preload="auto" aria-label="Vídeo ilustrativo do atendimento na clínica">
-              {heroVideoMobile && <source src={heroVideoMobile} type="video/mp4" media="(max-width: 767px)" />}
-              <source src={heroVideo} type="video/mp4" />
-            </video>
+            <HeroVideo src={heroVideo} mobileSrc={heroVideoMobile} poster={heroPoster} />
           ) : (
             <div className="grain absolute inset-0 overflow-hidden" role="img" aria-label="Espaço reservado para o vídeo institucional da clínica">
               <div className="anim-light absolute inset-[-20%] bg-[radial-gradient(40%_50%_at_62%_38%,rgba(214,222,209,0.35),transparent_70%)]" />
